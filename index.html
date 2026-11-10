@@ -28,6 +28,15 @@
 .vd-table-prompt{font-size:14px;margin:10px 0;color:#526c75}
 .vd-table-state{display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:8px}
 .vd-table-state span{padding:8px;border-radius:6px;background:#e9f3ed;font-size:16px;text-align:center}
+#vd-table.vd-table-complete{border:2px solid #16804a;background:#f4fff7}
+.vd-table-success-heading{color:#116337;font-weight:800}
+.vd-table-state-success>span{background:#16804a;color:#fff;font-size:18px;font-weight:700}
+.vd-table-state-success b{font-size:22px}
+.vd-result-tick{font-style:normal;font-weight:900}
+.vd-table-burst{height:0;position:relative;pointer-events:none}
+.vd-table-burst i{position:absolute;left:50%;top:-26px;color:#b67a00;font-size:21px;line-height:1;font-style:normal;opacity:0;animation:vd-trace-star 1.2s ease-out var(--delay) 1 both}
+@keyframes vd-trace-star{0%{opacity:0;transform:translate(-50%,0) scale(.3)}20%{opacity:1}100%{opacity:0;transform:translate(calc(-50% + var(--x)),var(--y)) rotate(60deg) scale(1.15)}}
+@media(prefers-reduced-motion:reduce){.vd-table-burst{display:none}.vd-table-burst i{animation:none}}
 .vd-table-instruction{font-size:14px;font-weight:700;min-height:20px;margin:10px 0}
 .vd-trace-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:16px}
 .vd-trace-table th,.vd-trace-table td{padding:9px 5px;border:1px solid #ccd7d9;text-align:center;white-space:normal;overflow-wrap:anywhere}
@@ -459,18 +468,21 @@
     function hintText(view){
       return `Before this block: ${view.variables.map(v=>v+' = '+display(view.current.values[v])).join(', ')}. ${view.current.instruction}`;
     }
-    function render(){
+    function render({celebrate=false}={}){
       const cell=getCell(),on=enabled();
       modeControl.querySelectorAll('[data-trace-mode]').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.traceMode==='on')===on)));
       document.body.classList.toggle('vd-with-table',on&&!$('student').hidden);
       $('vd-exercise').classList.toggle('vd-exercise-table',on);panel.hidden=!on;
+      panel.classList.remove('vd-table-complete');
       if(!on){panel.innerHTML='';markBlock({},false);return;}
       if(!$('student').hidden&&!safely(()=>store.open(getSession(),cell.id)))return;
       const view=store.view(getSession(),cell.id),current=view.current,last=view.answers.at(-1),lastEvent=view.history.at(-1);
-      const feedback=view.complete?'Trace finished. Enter your predicted output.':lastEvent?.type==='hint'?hintText(view):last&&!last.correct?'Not yet. Check the highlighted block and try again.':last?'Step saved.':'';
+      panel.classList.toggle('vd-table-complete',view.complete);
+      const feedback=view.complete?'Now enter your final output below.':lastEvent?.type==='hint'?hintText(view):last&&!last.correct?'Not yet. Check the highlighted block and try again.':last?'Step saved.':'';
+      const stars=view.complete&&celebrate?`<div class="vd-table-burst" aria-hidden="true">${[[-68,-20],[-35,-45],[0,-58],[35,-45],[68,-20]].map(([x,y],i)=>`<i style="--x:${x}px;--y:${y}px;--delay:${i*45}ms">★</i>`).join('')}</div>`:'';
       panel.innerHTML=`<div class="vd-table-heading"><h3>Trace table</h3><span class="vd-table-input">Input = ${cell.input}</span></div>
-        <p class="vd-table-prompt">${view.complete?'Your checked values stay visible.':'Predict the next value.'}</p>
-        <div class="vd-table-state">${view.variables.map(v=>`<span>${escape(v)} = <b>${escape(display(view.values[v]))}</b></span>`).join('')}</div>
+        <p class="vd-table-prompt${view.complete?' vd-table-success-heading':''}">${view.complete?'Trace complete! Well done!':'Predict the next value.'}</p>
+        <div class="vd-table-state${view.complete?' vd-table-state-success':''}">${view.variables.map(v=>`<span>${view.complete&&v==='score'?'<i class="vd-result-tick" aria-hidden="true">✓</i> ':''}${escape(v)} = <b>${escape(display(view.values[v]))}</b></span>`).join('')}</div>${stars}
         <p id="vd-table-instruction" class="vd-table-instruction">${current?escape(current.instruction):'All steps checked.'}</p>
         <table class="vd-trace-table" aria-label="Student trace table"><thead><tr><th scope="col">Step</th>${view.variables.map(v=>`<th scope="col">${escape(v)}</th>`).join('')}</tr></thead><tbody>
         ${view.rows.map(r=>row(view,r)).join('')}${current?row(view,current,true):''}
@@ -488,7 +500,7 @@
         value=Number(raw);
       }
       const saved=safely(()=>store.answer(getSession(),cell.id,view.current.key,value));if(!saved?.ok)return;
-      render();$('vd-step-value')?.focus({preventScroll:true});
+      render({celebrate:store.view(getSession(),cell.id).complete});$('vd-step-value')?.focus({preventScroll:true});
     }
     modeControl.addEventListener('click',event=>{
       const button=event.target.closest('[data-trace-mode]');if(!button)return;
