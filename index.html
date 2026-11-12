@@ -122,6 +122,8 @@
 @media(prefers-reduced-motion:reduce){.vd-ladder-horizontal .vd-ladder-marker{transition:none}}
 /* A detective check has its own input; hide the next grid exercise's metadata. */
 .vd-checkpoint-open #vd-cell-heading,.vd-checkpoint-open #vd-cell-meta{display:none!important}
+.vd-check-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;list-style:none;padding:0;margin:12px 0}.vd-check-steps li{padding:8px 6px;border:2px solid transparent;border-radius:7px;font-size:12px;background:#f0f2f5;color:#56616f}.vd-check-steps li:nth-child(1){border-color:#d17c12}.vd-check-steps li:nth-child(2){border-color:#2776b5}.vd-check-steps li:nth-child(3){border-color:#8554b8}.vd-check-steps [data-state="active"]{font-weight:800;background:white;box-shadow:0 0 0 2px #173c4a}.vd-check-steps [data-state="done"]{background:#e2f0e8;color:#15553a}.vd-stage-question{padding:12px;border-radius:8px;font-size:20px!important}.vd-stage-1{background:#fff0d5;color:#6b3d00}.vd-stage-2{background:#e2f0ff;color:#164a78}.vd-stage-3{background:#efe6ff;color:#51317c}#vd-number-task[hidden]{display:none!important}
+@media(max-width:450px){.vd-check-steps li{font-size:11px;padding:7px 4px}.vd-stage-question{font-size:18px!important}}
 
 </style></head><body>
 <header><div><small>CODE · CALCULATE · COLOUR</small><h1>Mystery Image</h1><div>Trace the variables. Reveal the picture.</div></div><button id="teacher-button" type="button">Teacher monitor</button></header>
@@ -1006,9 +1008,13 @@ window.DetectiveActivity={cells:CELLS,core:ACTIVE_CORE,palette,config:ACTIVITY_C
 <script>(function(root) {
   'use strict';
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function selectionPrompt(key){return key==='set'?'Click SET score to input immediately AFTER change by 5.':key==='repeat'?'Click CHANGE score by 2 inside REPEAT 3.':'Click CHANGE score by 10.';}
+  function stepTwo(key){
+    return key==='set'?{title:'2. What number does this SET store in score?',action:'SET copies INPUT into score. Stop here: do not add 2 yet.'}:key==='repeat'?{title:'2. What is score after the THIRD +2?',action:'Start with the score shown below. Add 2 once for this repetition.'}:{title:'2. What is score after adding 10?',action:'Start with the score shown below, then add 10. Stop here.'};
+  }
   function mount({config,renderBlocks,getView,dispatch,refresh,newMission,getMonitorSession}) {
     const $=id=>document.getElementById(id);
-    let choice='',draftKey='';
+    let choice='',draftKey='',numberConfirmed=false;
     function renderStudent(view) {
       const m=view.missions, classroom=m?.mode==='classroom',key=m?.pendingCheck;
       $('vd-class-check').hidden=!classroom||!key;
@@ -1024,19 +1030,24 @@ window.DetectiveActivity={cells:CELLS,core:ACTIVE_CORE,palette,config:ACTIVITY_C
       if(!classroom||!key)return;
       const c=m.checks[key],q=c.question,identity=view.session.id+':'+key+':'+q.revision+':'+c.phase;
       const previous=$('vd-concept-answer'),value=identity===draftKey?previous?.value||'':'';
-      if(identity!==draftKey)choice='';draftKey=identity;
+      if(identity!==draftKey){choice='';numberConfirmed=false;}draftKey=identity;
       const feedback=c.phase==='feedback',transfer=c.phase==='transfer';
       const transferContext=transfer||(feedback&&c.history.some(h=>h.revision===q.revision&&h.kind==='identify'&&h.correct));
       const shownInput=transferContext?q.transferInput:q.input;
+      const stage=transferContext?3:feedback?2:choice===q.blockId?2:1;
+      const prompt=selectionPrompt(key);
+      const scoreQuestion=stepTwo(key).title;
       const workedFinal=feedback?root.DetectiveActivity.core.execute(q.program,shownInput):null;
-      $('vd-class-check').innerHTML=`<div class="vd-class-heading"><span>Detective challenge ${Object.keys(m.checks).indexOf(key)+1}/${Object.keys(m.checks).length}</span><strong>${key==='set'?'Set replaces':key==='repeat'?'Repeat updates':'Change adds'}</strong></div>
-        <p>${feedback?'Let’s investigate, then try a different example.':transfer?'New input. Predict the final score.':'Choose the block. Then predict its new score.'}</p>
-        <div class="vd-class-input">Input = <strong>${shownInput}</strong>${!transferContext?` · Before: score = <strong>${q.before}</strong>`:''}</div>
+      $('vd-class-check').innerHTML=`<div class="vd-class-heading"><span>Reward check · ${c.after} programs practised</span><strong>${key==='set'?'Set replaces':key==='repeat'?'Repeat updates':'Change adds'}</strong></div>
+        <ol class="vd-check-steps" aria-label="Three check steps">${['Choose the instruction','Score after that instruction','Final score · new input'].map((label,i)=>`<li data-check-step="${i+1}" data-state="${i+1===stage?'active':i+1<stage?'done':'locked'}"><b>${i+1}</b> ${esc(label)}</li>`).join('')}</ol>
+        <h3 id="vd-current-question" class="vd-stage-question vd-stage-${stage}">${transferContext?'3. What is the final score with this NEW input?':stage===2?scoreQuestion:'1. Choose the instruction'}</h3>
+        <p id="vd-stage-action">${transferContext?'Run the WHOLE program. No block selection this time.':stage===2?stepTwo(key).action:esc(prompt)}</p>
+        <div class="vd-class-input">Input = <strong>${shownInput}</strong>${!transferContext&&stage===2?` · Before: score = <strong>${q.before}</strong>`:''}</div>
         <div id="vd-concept-blocks" class="blocks">${renderBlocks(q.program,'concept-'+key)}</div>
-        ${feedback?`<div class="vd-class-worked"><strong>${esc(q.explanation)}</strong>${!transferContext?`<p>Selected step: score ${q.before} → ${q.expected}.</p>`:''}<p>For input ${shownInput}, the final score is ${workedFinal}. This is practice with support.</p></div><button id="vd-concept-next" type="button" class="submit">Try a new example</button>`:
-          `${!transfer?`<p id="vd-concept-prompt">${esc(q.prompt)}</p><p id="vd-block-choice" role="status">${choice?'Block selected.':'Select a block in the picture.'}</p>`:''}
-          <label for="vd-concept-answer">${transfer?'Final score':'New score after that block'}</label><input id="vd-concept-answer" inputmode="numeric" autocomplete="off" value="${esc(value)}">
-          <button id="vd-concept-submit" type="button" class="submit">${transfer?'Check new input':'Check my prediction'}</button><button id="vd-concept-help" type="button" class="vd-secondary">Show worked support</button>
+        ${feedback?`<div class="vd-class-worked"><strong>${esc(q.explanation)}</strong>${!transferContext?`<p>Only this step: score ${q.before} → <b>${q.expected}</b>.</p>`:`<p>For input ${shownInput}, the final score is ${workedFinal}.</p>`}<p>Practise these steps with a fresh example next.</p></div><button id="vd-concept-next" type="button" class="submit">Try a new example</button>`:
+          `${!transfer?`<p id="vd-concept-prompt">${esc(prompt)}</p><p id="vd-block-choice" role="status">${choice?'Block selected.':'Select a block in the picture.'}</p>`:''}
+          <div id="vd-number-task" ${stage===1?'hidden':''}><label for="vd-concept-answer">${transfer?'Final score after the WHOLE program':'Number stored in score at this step (not the final score)'}</label><input id="vd-concept-answer" inputmode="numeric" autocomplete="off" value="${esc(value)}">
+          <button id="vd-concept-submit" type="button" class="submit">${transfer?'Finish this check':'Check this score'}</button></div><button id="vd-concept-help" type="button" class="vd-secondary">Show worked support</button>
           <p id="vd-concept-feedback" role="status"></p>`}
         <p class="muted">Separate from grid points. Support is welcome and recorded.</p>`;
       if(!feedback&&!transfer){
@@ -1051,6 +1062,14 @@ window.DetectiveActivity={cells:CELLS,core:ACTIVE_CORE,palette,config:ACTIVITY_C
       const v=getView(),key=v.missions?.pendingCheck;if(!key)return;
       const c=v.missions.checks[key],q=c.question,raw=$('vd-concept-answer')?.value.trim();
       const value={kind,revision:q.revision};
+      if(kind==='identify'&&raw&&Number.isSafeInteger(Number(raw))&&Number(raw)===q.expected&&choice!==q.blockId){
+        numberConfirmed=true;
+        $('vd-concept-feedback').textContent='Your number is correct. Select the block for this step, then check again.';
+        $('vd-concept-feedback').className='feedback ok';
+        $('vd-block-choice').textContent='Number checked. Now choose the matching block.';
+        $('vd-concept-blocks').scrollIntoView({block:'nearest'});
+        return;
+      }
       if(kind==='identify'||kind==='transfer'){
         if(!raw||!Number.isSafeInteger(Number(raw))||(kind==='identify'&&!choice)){
           $('vd-concept-feedback').textContent=kind==='identify'?'Select a block and enter a whole number.':'Enter a whole number.';return;
@@ -1064,7 +1083,7 @@ window.DetectiveActivity={cells:CELLS,core:ACTIVE_CORE,palette,config:ACTIVITY_C
         $('vd-feedback').className='feedback ok';
         $('vd-feedback').textContent=completed.status==='independent'?'Detective check complete! You used a new input independently.':'Detective practice complete with support. Your grid points are unchanged.';
         $('vd-answer').focus({preventScroll:true});
-      }else $('vd-class-check').scrollIntoView({block:'nearest'});
+      }else {$('vd-class-check').scrollIntoView({block:'nearest'});$('vd-concept-answer')?.focus({preventScroll:true});}
     }
     function selectBlock(event) {
       const block=event.target.closest('[data-block-id]');
@@ -1073,7 +1092,25 @@ window.DetectiveActivity={cells:CELLS,core:ACTIVE_CORE,palette,config:ACTIVITY_C
       if(event.type==='keydown'&&!['Enter',' '].includes(event.key))return;
       event.preventDefault();choice=block.dataset.blockId;
       $('vd-concept-blocks').querySelectorAll('[data-block-id]').forEach(b=>b.classList.toggle('vd-concept-selected',b.dataset.blockId===choice));
-      $('vd-block-choice').textContent='Block selected. Predict its new score.';
+      if(choice!==c.question.blockId){
+        $('vd-number-task').hidden=true;
+        document.querySelectorAll('[data-check-step]').forEach(step=>step.dataset.state=step.dataset.checkStep==='1'?'active':'locked');
+        $('vd-current-question').className='vd-stage-question vd-stage-1';
+        $('vd-current-question').textContent='1. Choose the instruction';
+        $('vd-stage-action').textContent=selectionPrompt(v.missions.pendingCheck);
+        document.querySelector('#vd-class-check .vd-class-input').innerHTML='Input = <strong>'+c.question.input+'</strong>';
+        $('vd-block-choice').textContent='Not this instruction yet. Follow the orange question above.';
+        return;
+      }
+      $('vd-block-choice').textContent='Instruction selected. Now answer the BLUE question.';
+      $('vd-number-task').hidden=false;
+      document.querySelectorAll('[data-check-step]').forEach(step=>step.dataset.state=step.dataset.checkStep==='2'?'active':step.dataset.checkStep==='1'?'done':'locked');
+      $('vd-current-question').className='vd-stage-question vd-stage-2';
+      $('vd-current-question').textContent=stepTwo(v.missions.pendingCheck).title;
+      $('vd-stage-action').textContent=stepTwo(v.missions.pendingCheck).action;
+      document.querySelector('#vd-class-check .vd-class-input').innerHTML='Input = <strong>'+c.question.input+'</strong> · Before: score = <strong>'+c.question.before+'</strong>';
+      $('vd-concept-answer').focus({preventScroll:true});
+      if(numberConfirmed&&choice===c.question.blockId&&Number($('vd-concept-answer').value)===c.question.expected)submit('identify');
     }
     $('vd-class-check').addEventListener('click',event=>{
       selectBlock(event);
