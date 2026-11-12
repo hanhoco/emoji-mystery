@@ -125,6 +125,7 @@
 .vd-check-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;list-style:none;padding:0;margin:12px 0}.vd-check-steps li{padding:8px 6px;border:2px solid transparent;border-radius:7px;font-size:12px;background:#f0f2f5;color:#56616f}.vd-check-steps li:nth-child(1){border-color:#d17c12}.vd-check-steps li:nth-child(2){border-color:#2776b5}.vd-check-steps li:nth-child(3){border-color:#8554b8}.vd-check-steps [data-state="active"]{font-weight:800;background:white;box-shadow:0 0 0 2px #173c4a}.vd-check-steps [data-state="done"]{background:#e2f0e8;color:#15553a}.vd-stage-question{padding:12px;border-radius:8px;font-size:20px!important}.vd-stage-1{background:#fff0d5;color:#6b3d00}.vd-stage-2{background:#e2f0ff;color:#164a78}.vd-stage-3{background:#efe6ff;color:#51317c}#vd-number-task[hidden]{display:none!important}
 @media(max-width:450px){.vd-check-steps li{font-size:11px;padding:7px 4px}.vd-stage-question{font-size:18px!important}}
 .vd-assessment-stop>path{stroke:#2776b5!important;stroke-width:4px!important}.vd-assessment-stop{filter:drop-shadow(0 0 4px #2776b588)}.vd-assessment-move>path{stroke:#8554b8!important;stroke-width:4px!important;stroke-dasharray:6 3}.vd-assessment-move{filter:drop-shadow(0 0 4px #8554b888)}
+.vd-position-example{padding:12px;border:2px solid #8554b8;border-radius:8px;background:#f6f0ff;margin:10px 0}.vd-position-example h4{margin:0 0 8px;color:#51317c}.vd-position-code{padding-left:24px;margin:6px 0}.vd-position-code li{padding:6px 4px;color:#51317c}.vd-position-code code{display:inline-block;white-space:normal;background:#ffb531;color:#332104;border-radius:5px;padding:5px 8px;font-size:13px}.vd-empty-repeat{display:block;padding:3px 8px;font-size:12px;color:#655371}
 
 </style></head><body>
 <header><div><small>CODE · CALCULATE · COLOUR</small><h1>Mystery Image</h1><div>Trace the variables. Reveal the picture.</div></div><button id="teacher-button" type="button">Teacher monitor</button></header>
@@ -421,7 +422,7 @@
         else blocks.push(blocks[1].body.splice(0,1)[0]);
         Object.assign(q,{neutral:true,transferInput:input,transferExpected:core.executeBlocks(blocks,input),variantBlocks:blocks,
           prompt:key==='set'?'Which instruction removes the effect of the earlier +5?':key==='change'?'Which instruction would stop affecting the final result if moved to the beginning?':'Which instruction changes the stored value on each repetition?',
-          positionPrompt:key==='set'?'Imagine moving the marked instruction to the end, after the last change.':key==='change'?'Imagine moving the marked instruction to the beginning, before every other instruction.':'Imagine moving the marked instruction outside the repeat, immediately after it.'});
+          positionPrompt:key==='set'?'Move the SECOND set score to input below change score by 2.':key==='change'?'Move change score by 10 BEFORE set score to input.':'Move change score by 2 OUTSIDE repeat 3, directly below the repeat.'});
       }
       return q;
     }
@@ -1031,6 +1032,10 @@ window.DetectiveActivity={cells:CELLS,core:ACTIVE_CORE,palette,config:ACTIVITY_C
   function stepTwo(key){
     return key==='set'?{title:'2. What number does this SET store in score?',action:'SET copies INPUT into score. Stop here: do not add 2 yet.'}:key==='repeat'?{title:'2. What is score after the THIRD +2?',action:'Start with the score shown below. Add 2 once for this repetition.'}:{title:'2. What is score after adding 10?',action:'Start with the score shown below, then add 10. Stop here.'};
   }
+  function changedOrder(blocks){
+    const expression=value=>typeof value==='object'?expression(value.left)+' + '+expression(value.right):String(value);
+    return '<ol class="vd-position-code">'+blocks.map(b=>'<li><code>'+esc(b.op==='repeat'?'repeat '+b.count:b.op+' '+(b.variable||'score')+(b.op==='set'?' to ':' by ')+expression(b.value))+'</code>'+(b.op==='repeat'?(b.body.length?changedOrder(b.body):'<span class="vd-empty-repeat">(no instruction inside)</span>'):'')+'</li>').join('')+'</ol>';
+  }
   function mount({config,renderBlocks,getView,dispatch,refresh,newMission,getMonitorSession}) {
     const $=id=>document.getElementById(id);
     let choice='',draftKey='',numberConfirmed=false;
@@ -1040,15 +1045,15 @@ window.DetectiveActivity={cells:CELLS,core:ACTIVE_CORE,palette,config:ACTIVITY_C
       const feedback=c.phase==='feedback';
       const identity=view.session.id+':'+key+':'+q.revision+':'+c.phase;
       if(draftKey!==identity){choice='';numberConfirmed=false;draftKey=identity;}
-      const question=stage===1?q.prompt:stage===2?'What is score at the blue STOP point?':'What is the final score after this change of position?';
+      const question=stage===1?q.prompt:stage===2?'What is score at the blue STOP point?':q.positionPrompt+' What is the final score?';
       const results=c.lastResult;
       $('vd-class-check').innerHTML=`<div class="vd-class-heading"><span>Reward check · ${c.after} programs practised</span><strong>Code detective</strong></div>
         <ol class="vd-check-steps" aria-label="Three assessment steps">${['Choose an instruction','Trace to STOP','Changed order'].map((label,i)=>`<li data-check-step="${i+1}" data-state="${i+1===stage?'active':i+1<stage?'done':'locked'}"><b>${i+1}</b> ${label}</li>`).join('')}</ol>
         <h3 id="vd-current-question" class="vd-stage-question vd-stage-${stage}">${stage}. ${esc(question)}</h3>
-        <p id="vd-stage-action">${stage===1?'Choose one instruction, then confirm. Your choice is recorded before the next question.':stage===2?(key==='repeat'?'STOP after the THIRD execution of the blue-outlined instruction.':'STOP immediately after the blue-outlined instruction.'):'Keep the SAME input. '+esc(q.positionPrompt)}</p>
+        <p id="vd-stage-action">${stage===1?'Choose one instruction, then confirm. Your choice is recorded before the next question.':stage===2?(key==='repeat'?'STOP after the THIRD execution of the blue-outlined instruction.':'STOP immediately after the blue-outlined instruction.'):'Use the SAME input. Follow the changed order shown below.'}</p>
         <div class="vd-class-input">Input = <strong>${q.input}</strong></div>
-        <div id="vd-concept-blocks" class="blocks">${renderBlocks(q.program,'assessment-'+key)}</div>
-        ${stage===3?'<p class="muted">The picture shows the original program. Predict the changed order described above.</p>':''}
+        ${stage===3?'<details class="vd-original-order"><summary>Compare with the original order</summary>':''}<div id="vd-concept-blocks" class="blocks">${renderBlocks(q.program,'assessment-'+key)}</div>${stage===3?'</details>':''}
+        ${stage===3?'<section class="vd-position-example" aria-label="Changed instruction order"><h4>Changed order to evaluate</h4>'+changedOrder(q.variantBlocks)+'</section>':''}
         ${feedback?`<div class="vd-class-worked" role="status">${results&&c.feedbackPhase==='identify'?`<p>Instruction choice: <b>${results.blockCorrect?'correct':'needs another look'}</b></p><p>Value at STOP: <b>${results.numberCorrect?'correct':'needs another look'}</b></p>`:''}<strong>${esc(q.explanation)}</strong><p>${stage===3?'With the moved instruction, final score = '+q.transferExpected:stage===1?'The outlined instruction is the one described in this worked example.':'At STOP: score '+q.before+' → '+q.expected+'.'}</p></div><button id="vd-concept-next" type="button" class="submit">Try a fresh assessment</button>`:
         stage===1?`<p id="vd-block-choice" role="status">${choice?'Instruction selected. Confirm to continue.':'No instruction selected.'}</p><button id="vd-neutral-confirm" type="button" class="submit" ${choice?'':'disabled'}>Confirm my choice</button>`:`<label for="vd-concept-answer">${stage===2?'score at STOP (not after the whole program)':'Final score with the changed order'}</label><input id="vd-concept-answer" inputmode="numeric" autocomplete="off"><button id="vd-concept-submit" type="button" class="submit">${stage===2?'Submit choice and value':'Finish assessment'}</button>`}
         ${feedback?'':'<button id="vd-concept-help" type="button" class="vd-secondary">Show worked support</button><p id="vd-concept-feedback" role="status"></p>'}
