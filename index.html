@@ -120,6 +120,8 @@
 #vd-reward-ladder.vd-ladder-horizontal{margin:0 0 14px;padding:10px 14px}#vd-reward-ladder.vd-ladder-horizontal details{margin-top:0}.vd-ladder-horizontal .vd-ladder-key,.vd-ladder-horizontal small,.vd-ladder-horizontal .vd-ladder-track li>span{display:none}.vd-ladder-horizontal .vd-ladder-track{margin:0;padding:38px 0 0;border:0}.vd-ladder-horizontal .vd-ladder-track ol{display:grid;grid-template-columns:repeat(16,minmax(0,1fr));gap:0;border-bottom:3px solid #8a562f}.vd-ladder-horizontal .vd-ladder-track li{display:flex;justify-content:center;padding:0;height:25px;font-size:11px}.vd-ladder-horizontal .vd-ladder-marker{transition:left .7s cubic-bezier(.22,.75,.25,1)}.vd-ladder-horizontal .vd-monkey-body{left:-20px;bottom:0;width:40px;height:52px}.vd-ladder-horizontal .vd-ladder-position,.vd-ladder-horizontal .vd-ladder-total{font-size:12px;margin:5px 0}
 #vd-reward-shelf{grid-template-columns:minmax(0,1fr)}
 @media(prefers-reduced-motion:reduce){.vd-ladder-horizontal .vd-ladder-marker{transition:none}}
+/* A detective check has its own input; hide the next grid exercise's metadata. */
+.vd-checkpoint-open #vd-cell-heading,.vd-checkpoint-open #vd-cell-meta{display:none!important}
 
 </style></head><body>
 <header><div><small>CODE · CALCULATE · COLOUR</small><h1>Mystery Image</h1><div>Trace the variables. Reveal the picture.</div></div><button id="teacher-button" type="button">Teacher monitor</button></header>
@@ -1024,11 +1026,14 @@ window.DetectiveActivity={cells:CELLS,core:ACTIVE_CORE,palette,config:ACTIVITY_C
       const previous=$('vd-concept-answer'),value=identity===draftKey?previous?.value||'':'';
       if(identity!==draftKey)choice='';draftKey=identity;
       const feedback=c.phase==='feedback',transfer=c.phase==='transfer';
+      const transferContext=transfer||(feedback&&c.history.some(h=>h.revision===q.revision&&h.kind==='identify'&&h.correct));
+      const shownInput=transferContext?q.transferInput:q.input;
+      const workedFinal=feedback?root.DetectiveActivity.core.execute(q.program,shownInput):null;
       $('vd-class-check').innerHTML=`<div class="vd-class-heading"><span>Detective challenge ${Object.keys(m.checks).indexOf(key)+1}/${Object.keys(m.checks).length}</span><strong>${key==='set'?'Set replaces':key==='repeat'?'Repeat updates':'Change adds'}</strong></div>
         <p>${feedback?'Let’s investigate, then try a different example.':transfer?'New input. Predict the final score.':'Choose the block. Then predict its new score.'}</p>
-        <div class="vd-class-input">Input = <strong>${transfer?q.transferInput:q.input}</strong>${!transfer?` · Before: score = <strong>${q.before}</strong>`:''}</div>
+        <div class="vd-class-input">Input = <strong>${shownInput}</strong>${!transferContext?` · Before: score = <strong>${q.before}</strong>`:''}</div>
         <div id="vd-concept-blocks" class="blocks">${renderBlocks(q.program,'concept-'+key)}</div>
-        ${feedback?`<div class="vd-class-worked"><strong>${esc(q.explanation)}</strong><p>Selected step: score ${q.before} → ${q.expected}.</p><p>For input ${q.transferInput}, the final score is ${q.transferExpected}. This is practice with support.</p></div><button id="vd-concept-next" type="button" class="submit">Try a new example</button>`:
+        ${feedback?`<div class="vd-class-worked"><strong>${esc(q.explanation)}</strong>${!transferContext?`<p>Selected step: score ${q.before} → ${q.expected}.</p>`:''}<p>For input ${shownInput}, the final score is ${workedFinal}. This is practice with support.</p></div><button id="vd-concept-next" type="button" class="submit">Try a new example</button>`:
           `${!transfer?`<p id="vd-concept-prompt">${esc(q.prompt)}</p><p id="vd-block-choice" role="status">${choice?'Block selected.':'Select a block in the picture.'}</p>`:''}
           <label for="vd-concept-answer">${transfer?'Final score':'New score after that block'}</label><input id="vd-concept-answer" inputmode="numeric" autocomplete="off" value="${esc(value)}">
           <button id="vd-concept-submit" type="button" class="submit">${transfer?'Check new input':'Check my prediction'}</button><button id="vd-concept-help" type="button" class="vd-secondary">Show worked support</button>
